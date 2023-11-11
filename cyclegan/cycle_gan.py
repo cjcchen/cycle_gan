@@ -16,10 +16,9 @@ class LambdaLR:
         self.offset = offset
         self.decay_start_epoch = decay_start_epoch
 
-    def step(self, epoch):                                              ## return    1-max(0, epoch - 30) / (50 - 30)
-       return 0.8
-       #1-max(0, epoch-50)/100
-       #return 1.0 - max(0, epoch + self.offset - self.decay_start_epoch) / (self.n_epochs - self.decay_start_epoch)
+    def step(self, epoch):
+       #return 0.8
+       return 1.0 - max(0, epoch + self.offset - self.decay_start_epoch) / (self.n_epochs - self.decay_start_epoch)
 
 
 input_shape = (channels, img_height, img_width)
@@ -56,13 +55,13 @@ optimizer_D_B = torch.optim.Adam(D_B.parameters(), lr=lr, betas=(b1, b2))
 #)
 
 lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_G, lr_lambda=LambdaLR(n_epochs, 0, 80).step
+    optimizer_G, lr_lambda=LambdaLR(n_epochs, 0, decay_start_epoch).step
 )
 lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_D_A, lr_lambda=LambdaLR(n_epochs, 0, 80).step
+    optimizer_D_A, lr_lambda=LambdaLR(n_epochs, 0, decay_start_epoch).step
 )
 lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_D_B, lr_lambda=LambdaLR(n_epochs, 0, 80).step
+    optimizer_D_B, lr_lambda=LambdaLR(n_epochs, 0, decay_start_epoch).step
 )
 
 fake_A_buffer = ReplayBuffer()
@@ -138,8 +137,8 @@ def my_train():
   for epoch in range(start_epoch, n_epochs):       
       if epoch > start_epoch:
         save_model(epoch)
-      print("learning rate: G", lr_scheduler_G.get_lr(), 
-        " DA:",lr_scheduler_D_A.get_lr(), " DB:",lr_scheduler_D_B.get_lr(), flush=True)
+      print("learning rate: G", lr_scheduler_G.get_last_lr(), 
+        " DA:",lr_scheduler_D_A.get_last_lr(), " DB:",lr_scheduler_D_B.get_last_lr(), flush=True)
 
       for i, batch in enumerate(zip(ds.trainloaderA, ds.trainloaderB)): 
         inputsA, labelsA = batch[0]
@@ -156,19 +155,16 @@ def my_train():
         ## Self loss
         real_ouptut_A = G_BA(real_A) # A creates A, 
         real_output_B = G_AB(real_B) # B creates B,
-
         loss_A = criterion_l1(real_ouptut_A, real_A)          
         loss_B = criterion_l1(real_output_B, real_B)
-
-        loss_identity = (loss_A + loss_B) / 2 # self creation should be as small as possible
+        loss_identity = loss_A + loss_B
 
         ## GAN loss
         fake_B = G_AB(real_A) # A creates B 
         fake_A = G_BA(real_B) # B creates A
-
-        loss_GAN_AB = criterion_mse(D_B(fake_B), real_label) # fake_b shold be the same as b
-        loss_GAN_BA = criterion_mse(D_A(fake_A), real_label) # fake_b shold be the same as b
-        loss_GAN = (loss_GAN_AB + loss_GAN_BA) / 2 
+        loss_GAN_AB = criterion_mse(D_B(fake_B), real_label) 
+        loss_GAN_BA = criterion_mse(D_A(fake_A), real_label)
+        loss_GAN = loss_GAN_AB + loss_GAN_BA
     
         #print("loss iden:",loss_identity)
         #print("loss gan:",loss_GAN)
@@ -176,10 +172,9 @@ def my_train():
         # Cycle loss 
         recov_A = G_BA(fake_B)                                        
         recov_B = G_AB(fake_A)
-
         loss_cycle_A = criterion_l1(recov_A, real_A)             
         loss_cycle_B = criterion_l1(recov_B, real_B)
-        loss_cycle = (loss_cycle_A + loss_cycle_B) / 2
+        loss_cycle = loss_cycle_A + loss_cycle_B
 
         loss_G = loss_GAN + lambda_cyc * loss_cycle + lambda_id * loss_identity
         optimizer_G.zero_grad()                                       
@@ -189,15 +184,15 @@ def my_train():
 
         loss_real = criterion_mse(D_A(real_A), real_label)
         buffer_fake_A = fake_A_buffer.push_and_pop(fake_A)
-        loss_fake = criterion_mse(D_A(buffer_fake_A), fake_label)
-        loss_D_A = (loss_real + loss_fake) / 2
+        loss_fake = criterion_mse(D_A(buffer_fake_A.detach()), fake_label)
+        loss_D_A = (loss_real + loss_fake) 
         optimizer_D_A.zero_grad()
         loss_D_A.backward()     
         optimizer_D_A.step()   
 
         loss_real = criterion_mse(D_B(real_B), real_label)
         buffer_fake_B = fake_B_buffer.push_and_pop(fake_B)
-        loss_fake = criterion_mse(D_B(buffer_fake_B), fake_label)
+        loss_fake = criterion_mse(D_B(buffer_fake_B.detach()), fake_label)
         loss_D_B = (loss_real + loss_fake) / 2
 
         optimizer_D_B.zero_grad()                                     
@@ -221,9 +216,10 @@ def my_train():
         )
         sys.stdout.flush()
         #sample_images()
-        lr_scheduler_G.step()
-        lr_scheduler_D_A.step()
-        lr_scheduler_D_B.step()
+        #save_images(epoch*1000+i)
+      lr_scheduler_G.step()
+      lr_scheduler_D_A.step()
+      lr_scheduler_D_B.step()
 
 
 my_train()

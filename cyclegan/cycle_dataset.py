@@ -16,9 +16,9 @@ def imshow(inputs, picname):
     plt.close()
 
 data_transform = transforms.Compose([
-    transforms.Resize(img_height),  
-    #transforms.Resize(int(img_height * 1.12)),  
-    #transforms.RandomCrop((img_height, img_width)),
+    #transforms.Resize(img_height),  
+    transforms.Resize(int(img_height * 1.12)),  
+    transforms.RandomCrop((img_height, img_width)),
     transforms.RandomHorizontalFlip(),                            
     transforms.ToTensor(),                                         
     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),         
@@ -26,10 +26,10 @@ data_transform = transforms.Compose([
 
 class MyDataSet():
   def __init__(self,batch_size):
-    self.trainsetA = datasets.ImageFolder('datasets/facades/train/trainC', data_transform) 
-    self.trainsetB = datasets.ImageFolder('datasets/facades/train/trainD', data_transform) 
-    self.testA = datasets.ImageFolder('datasets/facades/test/testC', data_transform) 
-    self.testB = datasets.ImageFolder('datasets/facades/test/testD', data_transform) 
+    self.trainsetA = datasets.ImageFolder(path_trainA, data_transform) 
+    self.trainsetB = datasets.ImageFolder(path_trainB, data_transform) 
+    self.testA = datasets.ImageFolder(path_testA, data_transform) 
+    self.testB = datasets.ImageFolder(path_testB, data_transform) 
 
     self.trainloaderA = DataLoader(self.trainsetA, batch_size=batch_size, shuffle=True)
     self.trainloaderB = DataLoader(self.trainsetB, batch_size=batch_size, shuffle=True)
